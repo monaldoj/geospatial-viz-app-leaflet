@@ -1,0 +1,15 @@
+dash
+dash-bootstrap-components
+pandas
+shapely
+plotly
+databricks-sql-connector[pyarrow]
+databricks-sdk==0.40.0
+databricks-bundles
+python-dotenv
+dash-ag-grid
+dash-leaflet
+numpy
+h3
+pydeck
+uv

@@ -1,0 +1,13 @@
+resources:
+  apps:
+    geospatial_viz_app_leaflet:
+      name: "geospatial-viz-app-leaflet"
+      source_code_path: ../app
+      description: "A leaflet app for visualizing massive h3 geospatial data on Databricks."
+      resources:
+        - name: "sql-warehouse"
+          description: "A SQL warehouse for app to be able to work with"
+          sql_warehouse:
+            id: "862f1d757f0424f7"
+            permission: "CAN_USE"
+
