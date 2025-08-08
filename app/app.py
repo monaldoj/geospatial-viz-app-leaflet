@@ -34,6 +34,12 @@ if not DATABRICKS_WAREHOUSE_ID or not DATABRICKS_TOKEN:
 else:
     USE_MOCK_DATA = False
 
+# if not DATABRICKS_WAREHOUSE_ID:
+#     print("Warning: DATABRICKS_WAREHOUSE_ID not set. Using mock data for development.")
+#     USE_MOCK_DATA = True
+# else:
+#     USE_MOCK_DATA = False
+
 def sqlQuery(query: str) -> pd.DataFrame:
     """Execute a SQL query and return the result as a pandas DataFrame."""
     with sql.connect(

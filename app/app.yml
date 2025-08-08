@@ -4,10 +4,10 @@ command: [
 ]
 env:
 - name: "DATABRICKS_WAREHOUSE_ID"
-  valueFrom: "sql_warehouse"
+  valueFrom: "sql-warehouse"
 - name: DATABRICKS_SERVER_HOSTNAME
   value: e2-demo-field-eng.cloud.databricks.com
 - name: DATABRICKS_HOST
   value: https://e2-demo-field-eng.cloud.databricks.com/
-# - name: "DATABRICKS_TOKEN"
-#   valueFrom: "DATABRICKS_TOKEN"
+- name: "DATABRICKS_TOKEN"
+  valueFrom: "DATABRICKS_TOKEN"

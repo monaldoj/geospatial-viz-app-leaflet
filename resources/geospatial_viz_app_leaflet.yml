@@ -10,4 +10,9 @@ resources:
           sql_warehouse:
             id: "862f1d757f0424f7"
             permission: "CAN_USE"
+        - name: 'DATABRICKS_TOKEN'
+          secret:
+            scope: "justin-fe-secrets"
+            key: "fe_pat"            
+            permission: "READ"
 
