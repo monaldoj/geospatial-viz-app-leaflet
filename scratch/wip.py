@@ -91,7 +91,7 @@ def sqlQuery(query: str) -> pd.DataFrame:
 #     return pd.DataFrame(mock_data)
 
 # Fetch the all h3 data
-def get_data(catalog=None, schema=None, table=None, column=None, resolution=9, bounds=None, column_resolution=None):
+def get_data(catalog=None, schema=None, table=None, column=None, resolution=9, bounds=None):
     stime = dt.datetime.now()
     
     if not catalog or not schema or not table or not column:
@@ -104,11 +104,10 @@ def get_data(catalog=None, schema=None, table=None, column=None, resolution=9, b
     # else:
     try:
         bounds_wkt = bounds_to_wkt(bounds) if bounds else None
-        # resolution_query = f"SELECT h3_resolution({column}) as resolution FROM {catalog}.{schema}.{table} LIMIT 1"
-        # resolution_query_result = sqlQuery(resolution_query)['resolution'].iloc[0]
-        # print(f"resolution_query_result: {resolution_query_result}")
-        # resolution = min([resolution_query_result, resolution])
-        resolution = min([int(column_resolution), resolution])
+        resolution_query = f"SELECT h3_resolution({column}) as resolution FROM {catalog}.{schema}.{table} LIMIT 1"
+        resolution_query_result = sqlQuery(resolution_query)['resolution'].iloc[0]
+        print(f"resolution_query_result: {resolution_query_result}")
+        resolution = min([resolution_query_result, resolution])
         print(f"resolution: {resolution}")
         print(f"RESOLUTION QUERY TOOK:    {dt.datetime.now() - stime}")
         stime = dt.datetime.now()
@@ -304,7 +303,7 @@ def create_legend(septiles):
                 # }
                 style={
         "position": "absolute",
-        "top": "10px",
+        "top": "60px",
         "right": "10px",
         "backgroundColor": "#3A3A3A",
         "padding": "8px 16px", #"10px",
@@ -536,9 +535,9 @@ app.layout = html.Div(
                                 "color": "#FFFFFF", 
                                 "fontFamily": "Helvetica", 
                                 "fontSize": "14px",
-                                "margin": "0",
-                                "display": "inline-block",
-                                "verticalAlign": "middle"
+                                # "minHeight": "20px",
+                                # "height": "35px",
+                                # "marginTop": "20px"
                             }
                         )
                     ],
@@ -637,11 +636,10 @@ app.layout = html.Div(
      State("schema-dropdown", "value"),
      State("table-dropdown", "value"),
      State("column-dropdown", "value"),
-     State("column-description", "children")
      ],
      prevent_initial_call=True
 )
-def update_map_and_legend(n_clicks, center, zoom, bounds, catalog, schema, table, column, column_description):
+def update_map_and_legend(n_clicks, center, zoom, bounds, catalog, schema, table, column):
     if n_clicks is None:
         # Initial load - return the pre-created map and legend
         print("Initial map load")
@@ -658,9 +656,7 @@ def update_map_and_legend(n_clicks, center, zoom, bounds, catalog, schema, table
         global_zoom = zoom if zoom is not None else global_zoom
         global_bounds = bounds if bounds is not None else global_bounds
 
-        column_resolution = column_description.split(";")[0].split(":")[1].strip()
-        column_count = column_description.split(";")[1].split(":")[1].strip()
-        print(f"Center: {center}, Zoom: {zoom}, Bounds: {bounds}, Column Resolution: {column_resolution}, Column Count: {column_count}")
+        print(f"Center: {center}, Zoom: {zoom}, Bounds: {bounds}")
         if isinstance(global_center, list):
             global_center = {'lat': global_center[0], 'lng': global_center[1]}
         print(f"Global Center: {global_center}, Global Zoom: {global_zoom}, Global Bounds: {global_bounds}")
@@ -668,7 +664,7 @@ def update_map_and_legend(n_clicks, center, zoom, bounds, catalog, schema, table
         resolution = zoom_to_h3_resolution(global_zoom)
 
         # Fetch new data
-        new_map_data = get_data(catalog=catalog, schema=schema, table=table, column=column, bounds=global_bounds, resolution=resolution, column_resolution=column_resolution)
+        new_map_data = get_data(catalog=catalog, schema=schema, table=table, column=column, bounds=global_bounds, resolution=resolution)
         
         # Create new map and legend
         new_leaflet_map, new_legend = create_leaflet_map(new_map_data, zoom=global_zoom, center=global_center)
@@ -840,14 +836,14 @@ def validate_column(selected_column, selected_catalog, selected_schema, selected
         print(f"Count result: {count_result}")
 
         if column_resolution is None or column_resolution == 0 or count_result == 0:
-            print("Column resolution is None or count is 0.")
-            return "Column is not valid H3"
+            print("Column resolution is None or count is 0. Assuming PERMISSION DENIED")
+            return "Column not valid H3"
         else:
             print("Column resolution is valid. Returning columns.")
-            return f"Column resolution: {column_resolution}; Row count: {format(count_result, ',')}"
+            return f"Column resolution: {column_resolution}, Row count: {count_result}"
     except Exception as e:
-        print(f"Column is not valid H3: {e}")
-        return "Column is not valid H3"
+        print(f"Error validating column: {e}")
+        return "Error validating column"
 
 # # Callback to reset dependent dropdowns when parent selection changes
 # @app.callback(
