@@ -12,6 +12,7 @@ from databricks.sdk.core import Config
 import dash_leaflet as dl
 from dash.dependencies import Input, Output
 from dash_extensions.javascript import arrow_function
+from flask import request
 import json
 import h3
 import datetime as dt
@@ -19,6 +20,8 @@ import time
 
 # Set up the app
 app = dash.Dash(__name__)
+
+
 
 # Check for environment variables but don't fail if they're not set (for development)
 DATABRICKS_WAREHOUSE_ID = os.getenv("DATABRICKS_WAREHOUSE_ID")
@@ -28,8 +31,15 @@ global_center = None
 global_zoom = None
 global_bounds = None
 
-if not DATABRICKS_WAREHOUSE_ID or not DATABRICKS_TOKEN:
-    print("Warning: DATABRICKS_WAREHOUSE_ID or DATABRICKS_TOKEN not set. Cannot pull data.")
+if not DATABRICKS_WAREHOUSE_ID:
+    print("Warning: DATABRICKS_WAREHOUSE_ID not set. Cannot pull data.")
+
+if not DATABRICKS_TOKEN:
+    print("DATABRICKS_TOKEN not set in environment variables, using on-behalf-of authentication.")
+    DATABRICKS_TOKEN = request.headers.get("x-forwarded-access-token")
+    # # Not running inside Databricks App or not authenticated
+    # df = pd.DataFrame({"error": ["Not authenticated"]})
+    # return px.bar(df, x="error", y=None)
 
 def sqlQuery(query: str) -> pd.DataFrame:
     """Execute a SQL query and return the result as a pandas DataFrame."""
@@ -549,19 +559,21 @@ app.layout = html.Div(
                         dbc.Button(
                             "Refresh Data",
                             id="refresh-button",
-                            className="button-class",
+                            className="refresh-button",
+                            disabled=True,
                             style={
-                                "backgroundColor": "#3A3A3A",
-                                "color": "#FFFFFF",
-                                "cursor": "pointer",
+                                "backgroundColor": "#666666",
+                                "color": "#CCCCCC",
+                                "cursor": "not-allowed",
                                 "borderRadius": "4px",
                                 "fontSize": "14px",
                                 "fontFamily": "Helvetica",
                                 "fontWeight": "bold",
                                 "width": "150px",
                                 "height": "35px",
-                                "border": "1px solid #FFFFFF",
-                                "marginTop": "20px"
+                                "border": "1px solid #999999",
+                                "marginTop": "20px",
+                                "opacity": "0.6"
                             }
                         )
                     ],
@@ -816,7 +828,9 @@ def populate_columns(selected_table, selected_catalog, selected_schema):
 
 # Callback to validate column and show description
 @app.callback(
-    Output('column-description', 'children'),
+    [Output('column-description', 'children'),
+     Output('refresh-button', 'disabled'),
+     Output('refresh-button', 'style')],
     Input('column-dropdown', 'value'),
     [State('catalog-dropdown', 'value'),
      State('schema-dropdown', 'value'),
@@ -825,8 +839,50 @@ def populate_columns(selected_table, selected_catalog, selected_schema):
 )
 def validate_column(selected_column, selected_catalog, selected_schema, selected_table):
     """Validate the selected column and return description"""
+    disabled_style = {
+        "backgroundColor": "#666666",
+        "color": "#CCCCCC",
+        "cursor": "not-allowed",
+        "borderRadius": "4px",
+        "fontSize": "14px",
+        "fontFamily": "Helvetica",
+        "fontWeight": "bold",
+        "width": "150px",
+        "height": "35px",
+        "border": "1px solid #999999",
+        "marginTop": "20px",
+        "opacity": "0.6"
+    }
+    enabled_style = {
+        "backgroundColor": "#3A3A3A",
+        "color": "#FFFFFF",
+        "cursor": "pointer",
+        "borderRadius": "4px",
+        "fontSize": "14px",
+        "fontFamily": "Helvetica",
+        "fontWeight": "bold",
+        "width": "150px",
+        "height": "35px",
+        "border": "1px solid #FFFFFF",
+        "marginTop": "20px"
+    }
+    
     if not selected_column or not selected_catalog or not selected_schema or not selected_table:
-        return ""
+        # disabled_style = {
+        #     "backgroundColor": "#666666",
+        #     "color": "#CCCCCC",
+        #     "cursor": "not-allowed",
+        #     "borderRadius": "4px",
+        #     "fontSize": "14px",
+        #     "fontFamily": "Helvetica",
+        #     "fontWeight": "bold",
+        #     "width": "150px",
+        #     "height": "35px",
+        #     "border": "1px solid #999999",
+        #     "marginTop": "20px",
+        #     "opacity": "0.6"
+        # }
+        return "", True, disabled_style
     
     print(f"Validating column: {selected_column}, table: {selected_table}, schema: {selected_schema}, catalog: {selected_catalog}")
 
@@ -841,13 +897,54 @@ def validate_column(selected_column, selected_catalog, selected_schema, selected
 
         if column_resolution is None or column_resolution == 0 or count_result == 0:
             print("Column resolution is None or count is 0.")
-            return "Column is not valid H3"
+            # disabled_style = {
+            #     "backgroundColor": "#666666",
+            #     "color": "#CCCCCC",
+            #     "cursor": "not-allowed",
+            #     "borderRadius": "4px",
+            #     "fontSize": "14px",
+            #     "fontFamily": "Helvetica",
+            #     "fontWeight": "bold",
+            #     "width": "150px",
+            #     "height": "35px",
+            #     "border": "1px solid #999999",
+            #     "marginTop": "20px",
+            #     "opacity": "0.6"
+            # }
+            return "Column is not valid H3", True, disabled_style
         else:
             print("Column resolution is valid. Returning columns.")
-            return f"Column resolution: {column_resolution}; Row count: {format(count_result, ',')}"
+            # enabled_style = {
+            #     "backgroundColor": "#3A3A3A",
+            #     "color": "#FFFFFF",
+            #     "cursor": "pointer",
+            #     "borderRadius": "4px",
+            #     "fontSize": "14px",
+            #     "fontFamily": "Helvetica",
+            #     "fontWeight": "bold",
+            #     "width": "150px",
+            #     "height": "35px",
+            #     "border": "1px solid #FFFFFF",
+            #     "marginTop": "20px"
+            # }
+            return f"Column resolution: {column_resolution}; Row count: {format(count_result, ',')}", False, enabled_style
     except Exception as e:
         print(f"Column is not valid H3: {e}")
-        return "Column is not valid H3"
+        # disabled_style = {
+        #     "backgroundColor": "#666666",
+        #     "color": "#CCCCCC",
+        #     "cursor": "not-allowed",
+        #     "borderRadius": "4px",
+        #     "fontSize": "14px",
+        #     "fontFamily": "Helvetica",
+        #     "fontWeight": "bold",
+        #     "width": "150px",
+        #     "height": "35px",
+        #     "border": "1px solid #999999",
+        #     "marginTop": "20px",
+        #     "opacity": "0.6"
+        # }
+        return "Column is not valid H3", True, disabled_style
 
 # # Callback to reset dependent dropdowns when parent selection changes
 # @app.callback(
