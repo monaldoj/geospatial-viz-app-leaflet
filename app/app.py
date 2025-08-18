@@ -25,7 +25,7 @@ app = dash.Dash(__name__)
 
 # Check for environment variables but don't fail if they're not set (for development)
 DATABRICKS_WAREHOUSE_ID = os.getenv("DATABRICKS_WAREHOUSE_ID")
-DATABRICKS_TOKEN = os.getenv("DATABRICKS_TOKEN")
+# DATABRICKS_TOKEN = os.getenv("DATABRICKS_TOKEN")
 
 global_center = None
 global_zoom = None
@@ -34,19 +34,26 @@ global_bounds = None
 if not DATABRICKS_WAREHOUSE_ID:
     print("Warning: DATABRICKS_WAREHOUSE_ID not set. Cannot pull data.")
 
-if not DATABRICKS_TOKEN:
-    print("DATABRICKS_TOKEN not set in environment variables, using on-behalf-of authentication.")
-    DATABRICKS_TOKEN = request.headers.get("x-forwarded-access-token")
-    # # Not running inside Databricks App or not authenticated
-    # df = pd.DataFrame({"error": ["Not authenticated"]})
-    # return px.bar(df, x="error", y=None)
+def get_databricks_token():
+    DATABRICKS_TOKEN = os.getenv("DATABRICKS_TOKEN")
+    if not DATABRICKS_TOKEN:
+        print("DATABRICKS_TOKEN not set in environment variables, using on-behalf-of authentication.")
+        DATABRICKS_TOKEN = request.headers.get("x-forwarded-access-token")
+    return DATABRICKS_TOKEN
+
+# if not DATABRICKS_TOKEN:
+#     print("DATABRICKS_TOKEN not set in environment variables, using on-behalf-of authentication.")
+#     DATABRICKS_TOKEN = request.headers.get("x-forwarded-access-token")
+#     # # Not running inside Databricks App or not authenticated
+#     # df = pd.DataFrame({"error": ["Not authenticated"]})
+#     # return px.bar(df, x="error", y=None)
 
 def sqlQuery(query: str) -> pd.DataFrame:
     """Execute a SQL query and return the result as a pandas DataFrame."""
     with sql.connect(
         http_path=f"/sql/1.0/warehouses/{DATABRICKS_WAREHOUSE_ID}",
         server_hostname="e2-demo-field-eng.cloud.databricks.com",
-        access_token=DATABRICKS_TOKEN
+        access_token=get_databricks_token()
     ) as connection:
         with connection.cursor() as cursor:
             cursor.execute(query)
@@ -186,7 +193,7 @@ def get_catalogs():
     with sql.connect(
         http_path=f"/sql/1.0/warehouses/{DATABRICKS_WAREHOUSE_ID}",
         server_hostname="e2-demo-field-eng.cloud.databricks.com",
-        access_token=DATABRICKS_TOKEN
+        access_token=get_databricks_token()
     ) as connection:
         with connection.cursor() as cursor:
             cursor.execute("SHOW CATALOGS")
@@ -199,7 +206,7 @@ def get_schemas(catalog):
     with sql.connect(
         http_path=f"/sql/1.0/warehouses/{DATABRICKS_WAREHOUSE_ID}",
         server_hostname="e2-demo-field-eng.cloud.databricks.com",
-        access_token=DATABRICKS_TOKEN
+        access_token=get_databricks_token()
     ) as connection:
         with connection.cursor() as cursor:
             cursor.execute(f"SHOW SCHEMAS IN {catalog}")
@@ -212,7 +219,7 @@ def get_tables(catalog, schema):
     with sql.connect(
         http_path=f"/sql/1.0/warehouses/{DATABRICKS_WAREHOUSE_ID}",
         server_hostname="e2-demo-field-eng.cloud.databricks.com",
-        access_token=DATABRICKS_TOKEN
+        access_token=get_databricks_token()
     ) as connection:
         with connection.cursor() as cursor: 
             cursor.execute(f"SHOW TABLES IN {catalog}.{schema}")
@@ -225,7 +232,7 @@ def get_columns(catalog, schema, table):
     with sql.connect(
         http_path=f"/sql/1.0/warehouses/{DATABRICKS_WAREHOUSE_ID}",
         server_hostname="e2-demo-field-eng.cloud.databricks.com",
-        access_token=DATABRICKS_TOKEN
+        access_token=get_databricks_token()
     ) as connection:
         with connection.cursor() as cursor:
             cursor.execute(f"SHOW COLUMNS IN {catalog}.{schema}.{table}")
@@ -466,7 +473,7 @@ load_defaults = True
 # schema_list = get_schemas(default_catalog)
 # table_list = get_tables(default_catalog, default_schema)
 # column_list = get_columns(default_catalog, default_schema, default_table)
-catalog_list = get_catalogs()
+# catalog_list = get_catalogs()
 
 map_data = get_data(catalog=None, schema=None, table=None, column=None, bounds=None, resolution=8)
 # map_data = get_data(catalog=default_catalog, schema=default_schema, table=default_table, column=default_column, bounds=None, resolution=8)
@@ -476,6 +483,7 @@ leaflet_map, legend = create_leaflet_map(map_data, zoom=11, center={'lat': 40.71
 
 app.layout = html.Div(
     [
+        dcc.Location(id="url"),
         # Add dropdown selection controls at the top
         html.Div(
             [
@@ -484,10 +492,10 @@ app.layout = html.Div(
                         html.Label("Catalog:", style={"color": "#FFFFFF", "fontFamily": "Helvetica", "fontWeight": "bold", "marginRight": "10px"}),
                         dcc.Dropdown(
                             id="catalog-dropdown",
-                            placeholder="Select a catalog...",
+                            placeholder="Loading default...",
                             style={"width": "200px", "backgroundColor": "#FFFFFF", "fontFamily": "Helvetica", "color": "#3A3A3A"},
-                            options=catalog_list,
-                            value=default_catalog
+                            # options=catalog_list,
+                            # value=default_catalog
                         )
                     ],
                     style={"display": "inline-block", "marginRight": "20px"}
@@ -497,7 +505,7 @@ app.layout = html.Div(
                         html.Label("Schema:", style={"color": "#FFFFFF", "fontFamily": "Helvetica","fontWeight": "bold", "marginRight": "10px"}),
                         dcc.Dropdown(
                             id="schema-dropdown",
-                            placeholder="Loading...",
+                            placeholder="Loading default...",
                             disabled=True,
                             style={"width": "200px", "backgroundColor": "#FFFFFF", "fontFamily": "Helvetica", "color": "#3A3A3A"},
                         )
@@ -509,7 +517,7 @@ app.layout = html.Div(
                         html.Label("Table:", style={"color": "#FFFFFF", "fontFamily": "Helvetica", "fontWeight": "bold", "marginRight": "10px"}),
                         dcc.Dropdown(
                             id="table-dropdown",
-                            placeholder="Loading...",
+                            placeholder="Loading default...",
                             disabled=True,
                             style={"width": "200px", "backgroundColor": "#FFFFFF", "fontFamily": "Helvetica", "color": "#3A3A3A"},
                         )
@@ -521,7 +529,7 @@ app.layout = html.Div(
                         html.Label("Column:", style={"color": "#FFFFFF", "fontFamily": "Helvetica", "fontWeight": "bold", "marginRight": "10px"}),
                         dcc.Dropdown(
                             id="column-dropdown",
-                            placeholder="Loading...",
+                            placeholder="Loading default...",
                             disabled=True,
                             style={"width": "200px", "backgroundColor": "#FFFFFF", "fontFamily": "Helvetica", "color": "#3A3A3A"},
                         ),
@@ -706,12 +714,14 @@ def update_map_and_legend(n_clicks, center, zoom, bounds, catalog, schema, table
 # Callback to populate catalog dropdown on app load
 @app.callback(
     [Output('catalog-dropdown', 'options'),
+     Output('catalog-dropdown', 'placeholder'),
      Output('catalog-dropdown', 'disabled'),
      Output('catalog-dropdown', 'value')],
-    [Input('catalog-dropdown', 'id')],
+    [Input('catalog-dropdown', 'id'),
+     Input("url", "pathname")],
     prevent_initial_call=False
 )
-def populate_catalogs(trigger):
+def populate_catalogs(trigger, pathname):
     """Populate the catalog dropdown with available catalogs"""
     print("Populating catalogs dropdown...")
 
@@ -723,7 +733,7 @@ def populate_catalogs(trigger):
         catalogs = get_catalogs()
         # print(f"Retrieved catalogs: {catalogs}")
         print("returning:", default_catalog)
-        return catalogs, False, default_catalog if load_defaults else None
+        return catalogs, "Select a catalog...", False, default_catalog if load_defaults else None
         
     except Exception as e:
         print(f"Error fetching catalogs: {e}")
