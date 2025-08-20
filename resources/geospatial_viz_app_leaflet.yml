@@ -4,15 +4,13 @@ resources:
       name: "geospatial-viz-app-leaflet"
       source_code_path: ../app
       description: "A leaflet app for visualizing massive h3 geospatial data on Databricks."
+      budget_policy_id: "4635ae18-e8d8-4528-98d3-05805c7e6308"
       resources:
         - name: "sql-warehouse"
           description: "A SQL warehouse for app to be able to work with"
           sql_warehouse:
             id: "862f1d757f0424f7"
             permission: "CAN_USE"
-        # - name: 'DATABRICKS_TOKEN'
-        #   secret:
-        #     scope: "justin-fe-secrets"
-        #     key: "fe_pat"            
-        #     permission: "READ"
+      user_api_scopes:
+        - sql
 

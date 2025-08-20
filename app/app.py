@@ -1,5 +1,6 @@
 import os
 from databricks import sql
+from databricks.sdk.core import Config
 import pandas as pd
 import numpy as np
 from shapely.geometry import Polygon
@@ -12,20 +13,19 @@ from databricks.sdk.core import Config
 import dash_leaflet as dl
 from dash.dependencies import Input, Output
 from dash_extensions.javascript import arrow_function
-from flask import request
+import flask
 import json
-import h3
 import datetime as dt
-import time
 
 # Set up the app
 app = dash.Dash(__name__)
 
-
-
 # Check for environment variables but don't fail if they're not set (for development)
 DATABRICKS_WAREHOUSE_ID = os.getenv("DATABRICKS_WAREHOUSE_ID")
-# DATABRICKS_TOKEN = os.getenv("DATABRICKS_TOKEN")
+default_catalog = os.getenv("DEFAULT_CATALOG")
+default_schema = os.getenv("DEFAULT_SCHEMA")
+default_table = os.getenv("DEFAULT_TABLE")
+default_column = os.getenv("DEFAULT_COLUMN")
 
 global_center = None
 global_zoom = None
@@ -36,76 +36,37 @@ if not DATABRICKS_WAREHOUSE_ID:
 
 def get_databricks_token():
     DATABRICKS_TOKEN = os.getenv("DATABRICKS_TOKEN")
+
     if not DATABRICKS_TOKEN:
         print("DATABRICKS_TOKEN not set in environment variables, using on-behalf-of authentication.")
-        DATABRICKS_TOKEN = request.headers.get("x-forwarded-access-token")
+        DATABRICKS_TOKEN = flask.request.headers.get('X-Forwarded-Access-Token')
     return DATABRICKS_TOKEN
 
-# if not DATABRICKS_TOKEN:
-#     print("DATABRICKS_TOKEN not set in environment variables, using on-behalf-of authentication.")
-#     DATABRICKS_TOKEN = request.headers.get("x-forwarded-access-token")
-#     # # Not running inside Databricks App or not authenticated
-#     # df = pd.DataFrame({"error": ["Not authenticated"]})
-#     # return px.bar(df, x="error", y=None)
+def get_databricks_server_hostname():
+    DATABRICKS_SERVER_HOSTNAME = os.getenv("DATABRICKS_HOST")
+    if not DATABRICKS_SERVER_HOSTNAME:
+        print("DATABRICKS_SERVER_HOSTNAME not set in environment variables pulling from config.")
+        cfg = Config()
+        DATABRICKS_SERVER_HOSTNAME = cfg.host
+    return DATABRICKS_SERVER_HOSTNAME
 
 def sqlQuery(query: str) -> pd.DataFrame:
     """Execute a SQL query and return the result as a pandas DataFrame."""
+    # print("RUNNING QUERY:", query)
+    DATABRICKS_SERVER_HOSTNAME = get_databricks_server_hostname()
+    DATABRICKS_TOKEN = get_databricks_token()
     with sql.connect(
         http_path=f"/sql/1.0/warehouses/{DATABRICKS_WAREHOUSE_ID}",
-        server_hostname="e2-demo-field-eng.cloud.databricks.com",
-        access_token=get_databricks_token()
+        server_hostname=DATABRICKS_SERVER_HOSTNAME,
+        access_token=DATABRICKS_TOKEN
     ) as connection:
+        print("CONNECTION MADE")
         with connection.cursor() as cursor:
             cursor.execute(query)
             columns = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
             df = pd.DataFrame(rows, columns=columns)
         return df
-
-# def get_mock_data():
-#     """Generate mock data for development when database is not available"""
-#     print("Generating mock data for development...")
-    
-#     # Create some mock hexagons around NYC
-#     mock_hexagons = [
-#         "85283473fffffff",  # NYC area H3 hexagon
-#         "85283477fffffff",
-#         "8528347bfffffff",
-#         "85283483fffffff",
-#         "85283487fffffff",
-#         "8528348bfffffff",
-#         "8528348ffffffff",
-#         "85283493fffffff",
-#         "85283497fffffff"
-#     ]
-    
-#     mock_data = []
-#     for i, hex_id in enumerate(mock_hexagons):
-#         # Generate mock boundary and center
-#         try:
-#             hex_boundary = h3.cell_to_boundary(hex_id)
-#             hex_center = h3.cell_to_latlng(hex_id)
-            
-#             # Convert boundary to GeoJSON format
-#             boundary_coords = [[coord[1], coord[0]] for coord in hex_boundary]  # Convert to [lng, lat]
-            
-#             mock_data.append({
-#                 'hex_id': hex_id,
-#                 'hex_boundary': json.dumps({
-#                     "type": "Polygon",
-#                     "coordinates": [boundary_coords]
-#                 }),
-#                 'hex_center': json.dumps({
-#                     "type": "Point",
-#                     "coordinates": [hex_center[1], hex_center[0]]  # GeoJSON format: [lng, lat]
-#                 }),
-#                 'count': np.random.randint(10, 500)  # Random count for demo
-#             })
-#         except Exception as e:
-#             print(f"Error generating mock data for hex {hex_id}: {e}")
-#             continue
-    
-#     return pd.DataFrame(mock_data)
 
 # Fetch the all h3 data
 def get_data(catalog=None, schema=None, table=None, column=None, resolution=9, bounds=None, column_resolution=None):
@@ -115,16 +76,8 @@ def get_data(catalog=None, schema=None, table=None, column=None, resolution=9, b
         print("No catalog, schema, table, or column provided. Returning empty data.")
         return []
     
-    # print(f"USE_MOCK_DATA: {USE_MOCK_DATA}")
-    # if USE_MOCK_DATA:
-    #     data = [get_mock_data()]
-    # else:
     try:
         bounds_wkt = bounds_to_wkt(bounds) if bounds else None
-        # resolution_query = f"SELECT h3_resolution({column}) as resolution FROM {catalog}.{schema}.{table} LIMIT 1"
-        # resolution_query_result = sqlQuery(resolution_query)['resolution'].iloc[0]
-        # print(f"resolution_query_result: {resolution_query_result}")
-        # resolution = min([resolution_query_result, resolution])
         resolution = min([int(column_resolution), resolution])
         print(f"resolution: {resolution}")
         print(f"RESOLUTION QUERY TOOK:    {dt.datetime.now() - stime}")
@@ -144,34 +97,6 @@ def get_data(catalog=None, schema=None, table=None, column=None, resolution=9, b
                     FROM cell_agg
                     ORDER BY count DESC
         """
-        # query = f"""
-        #             WITH cell_agg AS (
-        #             SELECT
-        #                 h3_toparent(pickup_cell_12, {resolution}) as h3_cell_id,
-        #                 count(*) as count
-        #             FROM mjohns.liquid_nyc_h3_trip.h3_taxi_trips
-        #             WHERE {f"h3_toparent(pickup_cell_12, {resolution}) IN (SELECT EXPLODE(H3_COVERASH3('{bounds_wkt}', {resolution})))" if bounds_wkt else "1=1"}
-        #             GROUP BY h3_cell_id
-        #             )
-        #             SELECT h3_boundaryasgeojson(h3_cell_id) as hex_boundary,
-        #                     count
-        #             FROM cell_agg
-        #             ORDER BY count DESC
-        # """
-        # query = f"""
-        #             WITH cell_agg AS (
-        #             SELECT
-        #                 h3_toparent(h3, {resolution}) as h3_cell_id,
-        #                 count(*) as count
-        #             FROM justinm.geospatial.cb_walk_silver
-        #             WHERE {f"h3_toparent(h3, {resolution}) IN (SELECT EXPLODE(H3_COVERASH3('{bounds_wkt}', {resolution})))" if bounds_wkt else "1=1"}
-        #             GROUP BY h3_cell_id
-        #             )
-        #             SELECT h3_boundaryasgeojson(h3_cell_id) as hex_boundary,
-        #                     count
-        #             FROM cell_agg
-        #             ORDER BY count DESC
-        # """
         print(query)
         data = sqlQuery(query)
         print(data.head())
@@ -181,7 +106,7 @@ def get_data(catalog=None, schema=None, table=None, column=None, resolution=9, b
                 data[col] = data[col].apply(list)
     except Exception as e:
         print(f"An error occurred in querying data: {str(e)}")
-        print("Falling back to mock data...")
+        print("Returning empty data.")
         data = []
     
     print(f"DATA QUERY TOOK:    {dt.datetime.now() - stime}")
@@ -190,10 +115,15 @@ def get_data(catalog=None, schema=None, table=None, column=None, resolution=9, b
     return data
 
 def get_catalogs():
+    DATABRICKS_SERVER_HOSTNAME = get_databricks_server_hostname()
+    DATABRICKS_TOKEN = get_databricks_token()
+    user_token = flask.request.headers.get('X-Forwarded-Access-Token')
+    if not user_token:
+        raise Exception("Missing access token in headers.")
     with sql.connect(
         http_path=f"/sql/1.0/warehouses/{DATABRICKS_WAREHOUSE_ID}",
-        server_hostname="e2-demo-field-eng.cloud.databricks.com",
-        access_token=get_databricks_token()
+        server_hostname=DATABRICKS_SERVER_HOSTNAME,
+        access_token=user_token
     ) as connection:
         with connection.cursor() as cursor:
             cursor.execute("SHOW CATALOGS")
@@ -203,10 +133,12 @@ def get_catalogs():
         return catalogs
     
 def get_schemas(catalog):
+    DATABRICKS_SERVER_HOSTNAME = get_databricks_server_hostname()
+    DATABRICKS_TOKEN = get_databricks_token()
     with sql.connect(
         http_path=f"/sql/1.0/warehouses/{DATABRICKS_WAREHOUSE_ID}",
-        server_hostname="e2-demo-field-eng.cloud.databricks.com",
-        access_token=get_databricks_token()
+        server_hostname=DATABRICKS_SERVER_HOSTNAME,
+        access_token=DATABRICKS_TOKEN
     ) as connection:
         with connection.cursor() as cursor:
             cursor.execute(f"SHOW SCHEMAS IN {catalog}")
@@ -216,10 +148,12 @@ def get_schemas(catalog):
         return schemas
 
 def get_tables(catalog, schema):
+    DATABRICKS_SERVER_HOSTNAME = get_databricks_server_hostname()
+    DATABRICKS_TOKEN = get_databricks_token()
     with sql.connect(
         http_path=f"/sql/1.0/warehouses/{DATABRICKS_WAREHOUSE_ID}",
-        server_hostname="e2-demo-field-eng.cloud.databricks.com",
-        access_token=get_databricks_token()
+        server_hostname=DATABRICKS_SERVER_HOSTNAME,
+        access_token=DATABRICKS_TOKEN
     ) as connection:
         with connection.cursor() as cursor: 
             cursor.execute(f"SHOW TABLES IN {catalog}.{schema}")
@@ -229,10 +163,12 @@ def get_tables(catalog, schema):
         return tables
 
 def get_columns(catalog, schema, table):
+    DATABRICKS_SERVER_HOSTNAME = get_databricks_server_hostname()
+    DATABRICKS_TOKEN = get_databricks_token()
     with sql.connect(
         http_path=f"/sql/1.0/warehouses/{DATABRICKS_WAREHOUSE_ID}",
-        server_hostname="e2-demo-field-eng.cloud.databricks.com",
-        access_token=get_databricks_token()
+        server_hostname=DATABRICKS_SERVER_HOSTNAME,
+        access_token=DATABRICKS_TOKEN
     ) as connection:
         with connection.cursor() as cursor:
             cursor.execute(f"SHOW COLUMNS IN {catalog}.{schema}.{table}")
@@ -306,20 +242,7 @@ def create_legend(septiles):
                         "fontWeight": "bold"}),
         html.Div(legend_divs)
     ], 
-                #     style={
-                #     "backgroundColor": "#3A3A3A",
-                #     "color": "#FFFFFF",
-                #     "cursor": "pointer",
-                #     "borderRadius": "4px",
-                #     "fontSize": "14px",
-                #     "fontFamily": "Helvetica",
-                #     "position": "absolute",
-                #     "top": "10px",
-                #     "right": "10px",
-                #     "zIndex": "1000",
-                #     "padding": "8px 16px"
-                # }
-                style={
+        style={
         "position": "absolute",
         "top": "10px",
         "right": "10px",
@@ -387,11 +310,7 @@ def create_log_color_scale(data, n_colors=7):
 def create_leaflet_map(map_data, zoom=None, center=None):
     """Create a Leaflet map component with the hexagon data"""
     print("creating leaflet map")
-    # print(json.loads(map_data.iloc[0]['hex_center'])['coordinates'])
-    # Calculate center point from the data
 
-    # center_lng, center_lat = json.loads(map_data.iloc[0]['hex_center'])['coordinates']
-    # print(f"center_lng: {center_lng}, center_lat: {center_lat}")
     septiles = create_log_color_scale(map_data['count']) if len(map_data) > 0 else range(1, 8)
     print('septiles', [int(x) for x in septiles])
     legend = create_legend(septiles)
@@ -405,9 +324,6 @@ def create_leaflet_map(map_data, zoom=None, center=None):
     }
     dlPolygons = []
     for i in range(len(map_data)):
-        # hex_centers_lats.append(json.loads(map_data.iloc[i]['hex_center'])['coordinates'][1])
-        # hex_centers_lngs.append(json.loads(map_data.iloc[i]['hex_center'])['coordinates'][0])
-
         hex_boundaries_polygon = [[coord[1], coord[0]] for coord in json.loads(map_data.iloc[i]['hex_boundary'])['coordinates'][0]]
         hex_boundaries_polygons.append(hex_boundaries_polygon)
         
@@ -456,30 +372,14 @@ def create_leaflet_map(map_data, zoom=None, center=None):
         id="map-container"
     )
     
-    # print("map_component", map_component)
     return map_component, legend
-
-# Test database connection
-# test_database_connection()
 
 # Get initial data
 print("getting data")
-# catalog_list = get_catalogs()
-default_catalog = 'mjohns'
-default_schema = 'liquid_nyc_h3_trip'
-default_table = 'h3_taxi_trips'
-default_column = 'pickup_cell_12'
 load_defaults = True
-# schema_list = get_schemas(default_catalog)
-# table_list = get_tables(default_catalog, default_schema)
-# column_list = get_columns(default_catalog, default_schema, default_table)
-# catalog_list = get_catalogs()
 
 map_data = get_data(catalog=None, schema=None, table=None, column=None, bounds=None, resolution=8)
-# map_data = get_data(catalog=default_catalog, schema=default_schema, table=default_table, column=default_column, bounds=None, resolution=8)
 leaflet_map, legend = create_leaflet_map(map_data, zoom=11, center={'lat': 40.7128, 'lng': -74.0060})
-
-# app.layout = dl.Map(dl.TileLayer(), center=[56, 10], zoom=6, style={"height": "50vh"})
 
 app.layout = html.Div(
     [
@@ -533,16 +433,6 @@ app.layout = html.Div(
                             disabled=True,
                             style={"width": "200px", "backgroundColor": "#FFFFFF", "fontFamily": "Helvetica", "color": "#3A3A3A"},
                         ),
-                        # html.Div(
-                        #     id="column-description",
-                        #     style={
-                        #         "color": "#FFFFFF", 
-                        #         "fontFamily": "Helvetica", 
-                        #         "fontSize": "12px",
-                        #         "marginTop": "5px",
-                        #         "minHeight": "20px"
-                        #     }
-                        # )
                     ],
                     style={"display": "inline-block", "marginRight": "20px"}
                 ),
@@ -596,33 +486,6 @@ app.layout = html.Div(
                 "boxShadow": "0 2px 4px rgba(0,0,0,0.3)"
             }
         ),
-        # Add refresh button at the top right
-        # html.Div(
-        #     dbc.Button(
-        #         "Refresh Data",
-        #         id="refresh-button2",
-        #         className="mb-3",
-        #         style={
-        #             "backgroundColor": "#3A3A3A",
-        #             "color": "#FFFFFF",
-        #             "cursor": "pointer",
-        #             "borderRadius": "4px",
-        #             "fontSize": "14px",
-        #             "fontFamily": "Helvetica",
-        #             "fontWeight": "bold",
-        #             "position": "absolute",
-        #             "top": "10px",
-        #             "right": "10px",
-        #             "zIndex": "1000",
-        #             "padding": "8px 16px"
-        #         }
-        #     ),
-        #     style={"position": "relative"}
-        # ),
-        # # Add legend with id for callback
-        # html.Div(id="legend-container"),
-        # # Add map with id for callback
-        # html.Div(id="map-container")
         dcc.Loading(
             children=[
                 html.Div(id="map-container", children=leaflet_map),
@@ -633,13 +496,6 @@ app.layout = html.Div(
             color='#FFFFFF',
             overlay_style={"visibility":"visible", "filter": "blur(3px)"},
         ),
-        # # Hidden interval component
-        # dcc.Interval(
-        #     id="on-load-trigger",
-        #     interval=1*1000,  # 1 second (small delay to ensure page load)
-        #     n_intervals=0,
-        #     max_intervals=1   # only fire once
-        # ),
     ],
     style={"backgroundColor": "#29323C"},
     
@@ -696,21 +552,6 @@ def update_map_and_legend(n_clicks, center, zoom, bounds, catalog, schema, table
         print("Map refreshed successfully!")
         return new_leaflet_map, new_legend
 
-# @app.callback(
-#     # Output("viewport-info", "children"),
-#     [Inp]
-#     [State("map-container", "center"),
-#      State("map-container", "zoom"),
-#      State("map-container", "bounds")]  # This gets updated when viewport changes
-# )
-# def update_viewport_info(center, zoom, bounds):
-#     if center is None:
-#         return "Viewport not yet initialized"
-    
-#     print(f"Center: {center}, Zoom: {zoom}, Bounds: {bounds}")
-
-#     return f"Center: {center}, Zoom: {zoom}, Bounds: {bounds}"
-
 # Callback to populate catalog dropdown on app load
 @app.callback(
     [Output('catalog-dropdown', 'options'),
@@ -758,11 +599,6 @@ def populate_schemas(selected_catalog):
 
     if not selected_catalog:
         return [], "Select a schema...", True, None
-    
-    # if USE_MOCK_DATA:
-    #     # Return mock schemas for development
-    #     print("Using mock data for schemas")
-    #     return [{'label': 'PERMISSION DENIED', 'value': 'PERMISSION DENIED'}], "Select a schema...", False, None
     
     try:
         print(f"Fetching schemas for catalog {selected_catalog}...")
@@ -878,20 +714,6 @@ def validate_column(selected_column, selected_catalog, selected_schema, selected
     }
     
     if not selected_column or not selected_catalog or not selected_schema or not selected_table:
-        # disabled_style = {
-        #     "backgroundColor": "#666666",
-        #     "color": "#CCCCCC",
-        #     "cursor": "not-allowed",
-        #     "borderRadius": "4px",
-        #     "fontSize": "14px",
-        #     "fontFamily": "Helvetica",
-        #     "fontWeight": "bold",
-        #     "width": "150px",
-        #     "height": "35px",
-        #     "border": "1px solid #999999",
-        #     "marginTop": "20px",
-        #     "opacity": "0.6"
-        # }
         return "", True, disabled_style
     
     print(f"Validating column: {selected_column}, table: {selected_table}, schema: {selected_schema}, catalog: {selected_catalog}")
@@ -907,85 +729,13 @@ def validate_column(selected_column, selected_catalog, selected_schema, selected
 
         if column_resolution is None or column_resolution == 0 or count_result == 0:
             print("Column resolution is None or count is 0.")
-            # disabled_style = {
-            #     "backgroundColor": "#666666",
-            #     "color": "#CCCCCC",
-            #     "cursor": "not-allowed",
-            #     "borderRadius": "4px",
-            #     "fontSize": "14px",
-            #     "fontFamily": "Helvetica",
-            #     "fontWeight": "bold",
-            #     "width": "150px",
-            #     "height": "35px",
-            #     "border": "1px solid #999999",
-            #     "marginTop": "20px",
-            #     "opacity": "0.6"
-            # }
             return "Column is not valid H3", True, disabled_style
         else:
             print("Column resolution is valid. Returning columns.")
-            # enabled_style = {
-            #     "backgroundColor": "#3A3A3A",
-            #     "color": "#FFFFFF",
-            #     "cursor": "pointer",
-            #     "borderRadius": "4px",
-            #     "fontSize": "14px",
-            #     "fontFamily": "Helvetica",
-            #     "fontWeight": "bold",
-            #     "width": "150px",
-            #     "height": "35px",
-            #     "border": "1px solid #FFFFFF",
-            #     "marginTop": "20px"
-            # }
             return f"Column resolution: {column_resolution}; Row count: {format(count_result, ',')}", False, enabled_style
     except Exception as e:
         print(f"Column is not valid H3: {e}")
-        # disabled_style = {
-        #     "backgroundColor": "#666666",
-        #     "color": "#CCCCCC",
-        #     "cursor": "not-allowed",
-        #     "borderRadius": "4px",
-        #     "fontSize": "14px",
-        #     "fontFamily": "Helvetica",
-        #     "fontWeight": "bold",
-        #     "width": "150px",
-        #     "height": "35px",
-        #     "border": "1px solid #999999",
-        #     "marginTop": "20px",
-        #     "opacity": "0.6"
-        # }
         return "Column is not valid H3", True, disabled_style
-
-# # Callback to reset dependent dropdowns when parent selection changes
-# @app.callback(
-#     [Output('schema-dropdown', 'value'),
-#      Output('table-dropdown', 'value'),
-#      Output('column-dropdown', 'value')],
-#     [Input('catalog-dropdown', 'value'),
-#      Input('schema-dropdown', 'value'),
-#      Input('table-dropdown', 'value')],
-#     prevent_initial_call=True
-# )
-# def reset_dependent_dropdowns(catalog_value, schema_value, table_value):
-#     """Reset dependent dropdowns when parent selection changes"""
-#     ctx = callback_context
-#     if not ctx.triggered:
-#         return None, None, None
-    
-#     triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
-    
-#     if triggered_id == 'catalog-dropdown':
-#         # Reset schema, table, and column when catalog changes
-#         return None, None, None
-#     elif triggered_id == 'schema-dropdown':
-#         # Reset table and column when schema changes
-#         return no_update, None, None
-#     elif triggered_id == 'table-dropdown':
-#         # Reset column when table changes
-#         return no_update, no_update, None
-    
-#     return no_update, no_update, no_update
-
 
 if __name__ == "__main__":
     app.run(debug=True)
