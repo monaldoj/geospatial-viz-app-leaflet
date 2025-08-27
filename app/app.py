@@ -117,13 +117,10 @@ def get_data(catalog=None, schema=None, table=None, column=None, resolution=9, b
 def get_catalogs():
     DATABRICKS_SERVER_HOSTNAME = get_databricks_server_hostname()
     DATABRICKS_TOKEN = get_databricks_token()
-    user_token = flask.request.headers.get('X-Forwarded-Access-Token')
-    if not user_token:
-        raise Exception("Missing access token in headers.")
     with sql.connect(
         http_path=f"/sql/1.0/warehouses/{DATABRICKS_WAREHOUSE_ID}",
         server_hostname=DATABRICKS_SERVER_HOSTNAME,
-        access_token=user_token
+        access_token=DATABRICKS_TOKEN
     ) as connection:
         with connection.cursor() as cursor:
             cursor.execute("SHOW CATALOGS")
@@ -568,18 +565,21 @@ def populate_catalogs(trigger, pathname):
 
     global load_defaults
     global default_catalog
+
     
     try:
         print("Fetching catalogs from database...")
         catalogs = get_catalogs()
-        # print(f"Retrieved catalogs: {catalogs}")
         print("returning:", default_catalog)
+        if default_catalog is None:
+            print("No default catalog set, returning all catalogs")
+            return catalogs, "Select a catalog...", False, None 
         return catalogs, "Select a catalog...", False, default_catalog if load_defaults else None
         
     except Exception as e:
         print(f"Error fetching catalogs: {e}")
-        print("Falling back to mock data")
-        return [{'label': 'mock_catalog', 'value': 'mock_catalog'}]
+        print("Returning empty list")
+        return [], "Select a catalog...", False, None
 
 # Callback to populate schema dropdown when catalog is selected
 @app.callback(
@@ -597,7 +597,7 @@ def populate_schemas(selected_catalog):
     global load_defaults
     global default_schema
 
-    if not selected_catalog:
+    if not selected_catalog and default_schema is None:
         return [], "Select a schema...", True, None
     
     try:
@@ -628,7 +628,7 @@ def populate_tables(selected_schema, selected_catalog):
     global load_defaults
     global default_table
 
-    if not selected_schema or not selected_catalog:
+    if (not selected_schema or not selected_catalog) and default_table is None:
         return [], "Select a table...", True, None
     
     try:
@@ -659,7 +659,7 @@ def populate_columns(selected_table, selected_catalog, selected_schema):
     global load_defaults
     global default_column
 
-    if not selected_table or not selected_catalog or not selected_schema:
+    if (not selected_table or not selected_catalog or not selected_schema) and default_column is None:
         return [], "Select a column...", True, None
     
     try:
