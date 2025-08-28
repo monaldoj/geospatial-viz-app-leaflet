@@ -6,12 +6,12 @@ env:
 - name: "DATABRICKS_WAREHOUSE_ID"
   valueFrom: "sql-warehouse"
 - name: DEFAULT_CATALOG
-  value: "mjohns"
+  value: mjohns
 - name: DEFAULT_SCHEMA
-  value: "liquid_nyc_h3_trip"
+  value: liquid_nyc_h3_trip
 - name: DEFAULT_TABLE
-  value: "h3_taxi_trips"
+  value: h3_taxi_trips
 - name: DEFAULT_COLUMN
-  value: "pickup_cell_12"
+  value: pickup_cell_12
 # - name: "DATABRICKS_TOKEN"
 #   valueFrom: "DATABRICKS_TOKEN"

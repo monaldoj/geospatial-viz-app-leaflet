@@ -46,15 +46,22 @@ The application is built using:
    pip install -r requirements.txt
    ```
 
-3. **Set environment variables**:
+3. **Set environment variables for app**:
    ```bash
    export DATABRICKS_WAREHOUSE_ID="your_warehouse_id"
-   export DATABRICKS_HOST="https://your-workspace.cloud.databricks.com"
-   export DATABRICKS_TOKEN="your_access_token"
+   export DATABRICKS_HOST="your-workspace.cloud.databricks.com"
+   export DATABRICKS_TOKEN="your_access_token"*
+   export DATABRICKS_BUDGET_POLICY_ID="your_budget_policy_id"
    export DEFAULT_CATALOG="your_catalog"
    export DEFAULT_SCHEMA="your_schema"
    export DEFAULT_TABLE="your_table"
    export DEFAULT_COLUMN="your_h3_column"
+   ```
+
+3. **Set environment variables for bundle deployment (DAB)**:
+   ```bash
+   export BUNDLE_VAR_sql_warehouse_id=$DATABRICKS_WAREHOUSE_ID
+   export BUNDLE_VAR_budget_policy_id=$DATABRICKS_BUDGET_POLICY_ID
    ```
 
 4. **Run the application**:
@@ -79,6 +86,7 @@ The application is built using:
 | `DATABRICKS_WAREHOUSE_ID` | SQL warehouse ID for data access | Yes |
 | `DATABRICKS_HOST` | Databricks workspace URL | Yes |
 | `DATABRICKS_TOKEN` | Access token for authentication | Yes* |
+| `DATABRICKS_BUDGET_POLICY_ID` | Databricks budget policy id | No |
 | `DEFAULT_CATALOG` | Default catalog to load | No |
 | `DEFAULT_SCHEMA` | Default schema to load | No |
 | `DEFAULT_TABLE` | Default table to load | No |
@@ -180,7 +188,7 @@ geospatial_viz_app_leaflet/
 
 ```bash
 cd app
-python -m pytest tests/
+python app.py
 ```
 
 ### Databricks Testing
@@ -190,43 +198,6 @@ databricks bundle validate
 databricks bundle deploy --target dev
 ```
 
-## 📈 Monitoring
-
-The application includes built-in logging for:
-- Data query performance
-- H3 resolution changes
-- User interactions
-- Error handling
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🆘 Support
-
-For issues and questions:
-1. Check the Databricks documentation
-2. Review the application logs
-3. Verify your environment variables
-4. Ensure proper Databricks permissions
-
-## 🔮 Roadmap
-
-- [ ] Additional map tile providers
-- [ ] Export functionality for visualizations
-- [ ] Advanced filtering and querying
-- [ ] Real-time data streaming
-- [ ] Mobile-responsive optimizations
-- [ ] Custom color schemes
-- [ ] Batch processing capabilities
 
 ---
 
