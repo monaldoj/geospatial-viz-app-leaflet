@@ -79,7 +79,7 @@ def get_data(catalog=None, schema=None, table=None, column=None, resolution=9, b
     try:
         bounds_wkt = bounds_to_wkt(bounds) if bounds else None
         resolution = min([int(column_resolution), resolution])
-        print(f"resolution: {resolution}")
+        print(f"RESOLUTION: {resolution}")
         print(f"RESOLUTION QUERY TOOK:    {dt.datetime.now() - stime}")
         stime = dt.datetime.now()
 
@@ -97,9 +97,9 @@ def get_data(catalog=None, schema=None, table=None, column=None, resolution=9, b
                     FROM cell_agg
                     ORDER BY count DESC
         """
-        print(query)
+        # print(query)
         data = sqlQuery(query)
-        print(data.head())
+        # print(data.head())
         # Convert any ndarray columns to lists
         for col in data.columns:
             if isinstance(data[col].iloc[0], np.ndarray):
@@ -110,8 +110,8 @@ def get_data(catalog=None, schema=None, table=None, column=None, resolution=9, b
         data = []
     
     print(f"DATA QUERY TOOK:    {dt.datetime.now() - stime}")
-    print(data.head())
-    print(len(data), "rows")
+    # print(data.head())
+    print("ROWS:", len(data))
     return data
 
 def get_catalogs():
@@ -434,25 +434,32 @@ app.layout = html.Div(
                     style={"display": "inline-block", "marginRight": "20px"}
                 ),
                 html.Div(
-                    [
-                        html.P(
-                            id="column-description",
-                            style={
-                                "color": "#FFFFFF", 
-                                "fontFamily": "Helvetica", 
-                                "fontSize": "14px",
-                                "margin": "0",
-                                "display": "inline-block",
-                                "verticalAlign": "middle"
-                            }
-                        )
+                    [                        
+                        dcc.Loading(
+                            id="loading-spinner",
+                            type="circle",  # options: "default", "circle", "dot", "cube"
+                            children=html.P(
+                                            id="column-description",
+                                            style={
+                                                "color": "#FFFFFF", 
+                                                "fontFamily": "Helvetica", 
+                                                "fontSize": "14px",
+                                                "margin": "0",
+                                                "display": "inline-block",
+                                                "alignItems": "stretch",
+                                                "verticalAlign": "middle"
+                                            }
+                                        ),
+                            color="#FFFFFF",
+                            style={"transform": "scale(0.5)"},
+                        ),
                     ],
-                    style={"display": "inline-block", "marginRight": "20px"}
+                    style={"display": "inline-block", "marginRight": "20px", "alignItems": "stretch"}
                 ),
                 html.Div(
                     [
                         dbc.Button(
-                            "Refresh Data",
+                            "Refresh Map",
                             id="refresh-button",
                             className="refresh-button",
                             disabled=True,
@@ -561,7 +568,7 @@ def update_map_and_legend(n_clicks, center, zoom, bounds, catalog, schema, table
 )
 def populate_catalogs(trigger, pathname):
     """Populate the catalog dropdown with available catalogs"""
-    print("Populating catalogs dropdown...")
+    # print("Populating catalogs dropdown...")
 
     global load_defaults
     global default_catalog
@@ -592,7 +599,7 @@ def populate_catalogs(trigger, pathname):
 )
 def populate_schemas(selected_catalog):
     """Populate the schema dropdown when a catalog is selected"""
-    print(f"Populating schemas for catalog: {selected_catalog}")
+    # print(f"Populating schemas for catalog: {selected_catalog}")
 
     global load_defaults
     global default_schema
@@ -609,7 +616,7 @@ def populate_schemas(selected_catalog):
     except Exception as e:
         print(f"Error fetching schemas for catalog {selected_catalog}: {e}")
         print("Falling back to mock data")
-        return [{'label': 'PERMISSION DENIED', 'value': 'PERMISSION DENIED'}], "Select a schema...", False, None
+        return [{'label': 'NOT AVAILABLE', 'value': 'NOT AVAILABLE'}], "Select a schema...", False, None
 
 # Callback to populate table dropdown when schema is selected
 @app.callback(
@@ -623,7 +630,7 @@ def populate_schemas(selected_catalog):
 )
 def populate_tables(selected_schema, selected_catalog):
     """Populate the table dropdown when a schema is selected"""
-    print(f"Populating tables for schema: {selected_schema}, catalog: {selected_catalog}")
+    # print(f"Populating tables for schema: {selected_schema}, catalog: {selected_catalog}")
     
     global load_defaults
     global default_table
@@ -638,8 +645,8 @@ def populate_tables(selected_schema, selected_catalog):
         return tables, "Select a table...", False, default_table if load_defaults else None
     except Exception as e:
         print(f"Error fetching tables for schema {selected_catalog}.{selected_schema}: {e}")
-        print("ASSUMING PERMISSION DENIED")
-        return [{'label': 'PERMISSION DENIED', 'value': 'PERMISSION DENIED'}], "Select a table...", False, None
+        print("ASSUMING NOT AVAILABLE")
+        return [{'label': 'NOT AVAILABLE', 'value': 'NOT AVAILABLE'}], "Select a table...", False, None
 
 # Callback to populate column dropdown when table is selected
 @app.callback(
@@ -654,7 +661,7 @@ def populate_tables(selected_schema, selected_catalog):
 )
 def populate_columns(selected_table, selected_catalog, selected_schema):
     """Populate the column dropdown when a table is selected"""
-    print(f"Populating columns for table: {selected_table}, schema: {selected_schema}, catalog: {selected_catalog}")
+    # print(f"Populating columns for table: {selected_table}, schema: {selected_schema}, catalog: {selected_catalog}")
 
     global load_defaults
     global default_column
@@ -669,18 +676,19 @@ def populate_columns(selected_table, selected_catalog, selected_schema):
         return columns, "Select a column...", False, default_column if load_defaults else None
     except Exception as e:
         print(f"Error fetching columns for table {selected_catalog}.{selected_schema}.{selected_table}: {e}")
-        print("ASSUMING PERMISSION DENIED")
-        return ['PERMISSION DENIED'], "Select a column...", False, None
+        print("ASSUMING NOT AVAILABLE")
+        return ['NOT AVAILABLE'], "Select a column...", False, None
 
 # Callback to validate column and show description
 @app.callback(
     [Output('column-description', 'children'),
      Output('refresh-button', 'disabled'),
-     Output('refresh-button', 'style')],
-    Input('column-dropdown', 'value'),
-    [State('catalog-dropdown', 'value'),
-     State('schema-dropdown', 'value'),
-     State('table-dropdown', 'value')],
+     Output('refresh-button', 'style'),
+     Output('refresh-button', 'title')],
+    [Input('column-dropdown', 'value'),
+     Input('catalog-dropdown', 'value'),
+     Input('schema-dropdown', 'value'),
+     Input('table-dropdown', 'value')],
     prevent_initial_call=False
 )
 def validate_column(selected_column, selected_catalog, selected_schema, selected_table):
@@ -714,28 +722,28 @@ def validate_column(selected_column, selected_catalog, selected_schema, selected
     }
     
     if not selected_column or not selected_catalog or not selected_schema or not selected_table:
-        return "", True, disabled_style
+        return "", True, disabled_style, "Select a valid H3 column"
     
     print(f"Validating column: {selected_column}, table: {selected_table}, schema: {selected_schema}, catalog: {selected_catalog}")
 
     try:
         resolution_query = f"SELECT h3_resolution({selected_column}) as resolution FROM {selected_catalog}.{selected_schema}.{selected_table} LIMIT 1"
         column_resolution = sqlQuery(resolution_query)['resolution'].iloc[0]
-        print(f"Column resolution: {column_resolution}")
+        # print(f"Column resolution: {column_resolution}")
 
         count_query = f"SELECT COUNT(*) as count FROM {selected_catalog}.{selected_schema}.{selected_table} WHERE {selected_column} IS NOT NULL"
         count_result = sqlQuery(count_query)['count'].iloc[0]
-        print(f"Count result: {count_result}")
+        # print(f"Count result: {count_result}")
 
         if column_resolution is None or column_resolution == 0 or count_result == 0:
             print("Column resolution is None or count is 0.")
-            return "Column is not valid H3", True, disabled_style
+            return "Column is not valid H3", True, disabled_style, "Must select a valid H3 column"
         else:
             print("Column resolution is valid. Returning columns.")
-            return f"Column resolution: {column_resolution}; Row count: {format(count_result, ',')}", False, enabled_style
+            return f"Column resolution: {column_resolution}; Row count: {format(count_result, ',')}", False, enabled_style, "Refresh map"
     except Exception as e:
         print(f"Column is not valid H3: {e}")
-        return "Column is not valid H3", True, disabled_style
+        return "Column is not valid H3", True, disabled_style, "Must select a valid H3 column"
 
 if __name__ == "__main__":
     app.run(debug=True)
