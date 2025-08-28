@@ -1,21 +1,23 @@
 # Geospatial Visualization App with Leaflet
 
-A modern, interactive web application for visualizing massive H3 geospatial data on Databricks using Leaflet maps. This application provides an intuitive interface for exploring and analyzing geospatial datasets with dynamic zoom levels and real-time data filtering.
+A interactive web application for visualizing massive H3 geospatial data on Databricks using Leaflet maps. This application demostrates the speed of exploring and visualizing any table in your Databricks workspace, which has an H3 index column. The responsiveness of the app is due using dynamic zoom levels determine the H3 resolution and refreshing the map to filter on the viewport to only pull and visualize relevant data.
 
 ## 🌟 Features
 
-- **Interactive Leaflet Maps**: Beautiful, responsive maps with dark theme styling
+- **Interactive Leaflet Maps**: Responsive maps with dark theme styling
 - **H3 Hexagon Visualization**: Efficient rendering of H3 geospatial data at multiple resolutions
 - **Dynamic Data Loading**: Real-time data fetching based on map viewport and zoom level
-- **Multi-level Data Selection**: Hierarchical dropdowns for catalog, schema, table, and column selection
+- **Multi-level Data Selection**: Select your catalog, schema, table, and column selection to visualize any table in your Databricks workspace.
 - **Adaptive Resolution**: Automatic H3 resolution adjustment based on zoom level for optimal performance
 - **Color-coded Heatmaps**: Logarithmic color scaling for better data representation
-- **Responsive UI**: Modern, clean interface with Bootstrap components
-- **Databricks Integration**: Seamless connection to Databricks SQL warehouses
+- **Databricks Integration**: Seamless connection to Databricks SQL warehouses for backend aggregations
+- **Databricks Asset Bundles (DABS)**: Built using DABs to efficiently deploy to your workspace
 
 ## 🏗️ Architecture
 
 The application is built using:
+- **Databricks Apps**: Deploy the app directly in your Databricks workspace
+- **On-behalf-on authentication**: Only displays data which app users have access to in Unity Catalog
 - **Frontend**: Dash (Python web framework) with Bootstrap components
 - **Maps**: Leaflet.js for interactive mapping
 - **Data Processing**: Pandas and NumPy for data manipulation
@@ -51,12 +53,15 @@ The application is built using:
    export DATABRICKS_WAREHOUSE_ID="your_warehouse_id"
    export DATABRICKS_HOST="your-workspace.cloud.databricks.com"
    export DATABRICKS_TOKEN="your_access_token"*
-   export DATABRICKS_BUDGET_POLICY_ID="your_budget_policy_id"
+   export DATABRICKS_BUDGET_POLICY_ID="your_budget_policy_id"**
    export DEFAULT_CATALOG="your_catalog"
    export DEFAULT_SCHEMA="your_schema"
    export DEFAULT_TABLE="your_table"
    export DEFAULT_COLUMN="your_h3_column"
    ```
+
+    *Can use on-behalf-of authentication if not set, but local development requires a token
+    **Budget policy is option when deploying the DAB
 
 3. **Set environment variables for bundle deployment (DAB)**:
    ```bash
@@ -72,7 +77,11 @@ The application is built using:
 ### Databricks Deployment
 
 1. **Configure your Databricks workspace** in `databricks.yml`
-2. **Deploy using Databricks Asset Bundles**:
+2. **Validate your Databricks Asset Bundle**:
+   ```bash
+   databricks bundle validate
+   ```
+3. **Deploy using Databricks Asset Bundles**:
    ```bash
    databricks bundle deploy
    ```
@@ -96,10 +105,8 @@ The application is built using:
 
 ### Data Requirements
 
-Your Databricks tables should contain:
-- **H3 columns**: Hexagonal grid identifiers at various resolutions
-- **Geospatial data**: Location-based information for visualization
-- **Count/aggregation columns**: Numerical data for color coding
+Your Databricks table should contain:
+- **H3 columns**: Valid H3 index column
 
 ## 📊 Usage
 
@@ -135,21 +142,12 @@ The application automatically adjusts H3 resolution based on zoom level:
 | 12-15 | 10-11 | Neighborhood view |
 | 16+ | 12 | Street-level detail |
 
-## 🔌 API Endpoints
-
-The application provides several internal endpoints for data management:
-
-- **Data Fetching**: Dynamic SQL queries based on viewport and resolution
-- **Metadata Discovery**: Automatic catalog, schema, table, and column discovery
-- **H3 Validation**: Column validation for H3 geospatial data
-- **Performance Optimization**: Viewport-based data loading
-
 ## 🚀 Performance Features
 
 - **Lazy Loading**: Data is only fetched when needed
 - **Viewport Filtering**: Queries are limited to visible map area
 - **Resolution Optimization**: H3 resolution automatically adjusts for performance
-- **Connection Pooling**: Efficient Databricks SQL connections
+- **Server-side Processing**: Performs aggregations in Databricks SQL warehouses
 
 ## 🛠️ Development
 
@@ -161,26 +159,16 @@ geospatial_viz_app_leaflet/
 │   ├── app.py              # Main application file
 │   ├── app.yml             # App configuration
 │   └── requirements.txt    # Python dependencies
+├── notebooks/
+│   ├── nb01-download-prep-large-scale-dataset.dbc      # Databricks notebook for data preparation
+│   ├── nb01-download-prep-large-scale-dataset.ipynb    # Jupyter notebook for data preparation
+│   ├── nb02-query-explore-large-scale-tables.dbc       # Databricks notebook for data exploration
+│   └── nb02-query-explore-large-scale-tables.ipynb     # Jupyter notebook for data exploration
 ├── resources/
 │   └── geospatial_viz_app_leaflet.yml  # Databricks resources
 ├── databricks.yml          # Bundle configuration
 └── README.md               # This file
 ```
-
-### Key Components
-
-- **`app.py`**: Main Dash application with all callbacks and UI logic
-- **Map Creation**: `create_leaflet_map()` function for map generation
-- **Data Fetching**: `get_data()` function for SQL queries
-- **H3 Processing**: Resolution mapping and boundary conversion
-- **UI Components**: Dropdowns, buttons, and responsive layout
-
-### Adding New Features
-
-1. **New Map Layers**: Extend the `create_leaflet_map()` function
-2. **Additional Data Sources**: Modify the `get_data()` function
-3. **UI Enhancements**: Add new Dash components to the layout
-4. **Styling**: Update CSS and Bootstrap classes
 
 ## 🧪 Testing
 
@@ -201,4 +189,4 @@ databricks bundle deploy --target dev
 
 ---
 
-**Built with ❤️ using Dash, Leaflet, and Databricks**
+**Built using Databricks, Dash, and Leaflet**
