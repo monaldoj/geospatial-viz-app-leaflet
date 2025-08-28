@@ -2,6 +2,8 @@
 
 A interactive web application for visualizing massive H3 geospatial data on Databricks using Leaflet maps. This application demostrates the speed of exploring and visualizing any table in your Databricks workspace, which has an H3 index column. The responsiveness of the app is due using dynamic zoom levels determine the H3 resolution and refreshing the map to filter on the viewport to only pull and visualize relevant data.
 
+![Scaling Geospatial Analytics Demo](images/scaling_geospatial_analytics_blog.gif)
+
 ## 🌟 Features
 
 - **Interactive Leaflet Maps**: Responsive maps with dark theme styling
